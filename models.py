@@ -58,24 +58,25 @@ def ResNet101Atrous():
   results = ResNetAtrous([3, 4, 23, 3], [2, 2, 2])(inputs);
   return tf.keras.Model(inputs = inputs, outputs = results, name = 'resnet101');
 
-def Attention():
+def Attention(nshot):
 
-  inputs = tf.keras.Input((None, None, 512)); # inputs.shape = (qn, h / 16, w / 16, 256 + 256)
+  inputs = tf.keras.Input((None, None, nshot * 512)); # inputs.shape = (qn, h / 16, w / 16, nshot * 512)
   # 1) get masks for query images according to this support image
-  outputs = tf.keras.layers.Conv2D(256, (3, 3), padding = 'same')(inputs); # outputs.shape = (qn, h / 16, w / 16, 256)
+  outputs = tf.keras.layers.Conv2D(nshot * 256, (3, 3), padding = 'same', groups = nshot)(inputs); # outputs.shape = (qn, h / 16, w / 16, nshot * 256)
   # 2) get attention weights for query images of this support image
-  att = tf.keras.layers.Conv2D(256, (3, 3), padding = 'same')(inputs); # att.shape = (qn, h / 16, w / 16, 256)
-  att = tf.keras.layers.MaxPool2D(pool_size = (3, 3), strides = (1, 1), padding = 'same')(att); # att.shape = (qn, h / 16, w / 16, 256)
-  att = tf.keras.layers.Conv2D(256, (3, 3), padding = 'same')(att); # att.shape = (qn, h / 16, w / 16, 256)
-  att = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x, axis = [1, 2, 3], keepdims = True))(att); # att.shape = (qn, 1, 1, 1)
-  attended = tf.keras.layers.Lambda(lambda x: x[0] * x[1])([outputs, att]); # attended.shape = (qn, h / 16, w / 16, 256)
-  return tf.keras.Model(inputs = inputs, outputs = attended);
+  att = tf.keras.layers.Conv2D(nshot * 256, (3, 3), padding = 'same', groups = nshot)(inputs); # att.shape = (qn, h / 16, w / 16, nshot * 256)
+  att = tf.keras.layers.MaxPool2D(pool_size = (3, 3), strides = (1, 1), padding = 'same')(att); # att.shape = (qn, h / 16, w / 16, nshot * 256)
+  att = tf.keras.layers.Conv2D(nshot * 256, (3, 3), padding = 'same', groups = nshot)(att); # att.shape = (qn, h / 16, w / 16, nshot * 256)
+  att = tf.keras.layers.Lambda(lambda x, n: tf.transpose(tf.reshape(x, (tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], n, 256)), (3, 0, 1, 2, 4)), arguments = {'n': nshot})(att); # att.shape = (nshot, qn, h / 16, w / 16, 256)
+  att = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x, axis = [2, 3, 4], keepdims = True))(att); # att.shape = (nshot, qn, 1, 1, 1)
+  attended = tf.keras.layers.Lambda(lambda x: tf.expand_dims(x[0], axis = 0) * x[1])([outputs, att]); # attended.shape = (nshot, qn, h / 16, w / 16, 256)
+  return tf.keras.Model(inputs = inputs, outputs = attended, name = 'attention');
 
-def DenseComparisonModule(pretrain = None):
+def DenseComparisonModule(nshot = 10, pretrain = None):
 
   query = tf.keras.Input((None, None, 3)); # query.shape = (qn, h, w, 3)
-  support = tf.keras.Input((None, None, 3)); # support.shape = (nshot, h, w, 3)
-  labels = tf.keras.Input((None, None, 1)); # labels.shape = (nshot, h, w, 1)
+  support = tf.keras.Input((None, None, 3), batch_size = nshot); # support.shape = (nshot, h, w, 3)
+  labels = tf.keras.Input((None, None, 1), batch_size = nshot); # labels.shape = (nshot, h, w, 1)
   imgs_concat = tf.keras.layers.Concatenate(axis = 0)([support, query]); # imgs_concat.shape = (nshot + qn, h, w, 3)
   resnet50 = ResNet50Atrous();
   # load pretrained model
@@ -86,10 +87,10 @@ def DenseComparisonModule(pretrain = None):
   supp_fts, qry_fts = tf.keras.layers.Lambda(lambda x: tf.split(x[0], (tf.shape(x[1])[0], tf.shape(x[2])[0]), axis = 0))([img_fts, support, query]); # supp_fts.shape = (nshot, h / 16, w / 16, 256), qry_fts.shape = (qn, h / 16, w / 16, 256)
   supp_lb = tf.keras.layers.Lambda(lambda x: tf.image.resize(x[0], size = tf.shape(x[1])[1:3], method = tf.image.ResizeMethod.BILINEAR))([labels, img_fts]); # supp_lb.shape = (nshot, h / 16, w / 16, 256)
   proto = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(x[0] * x[1], axis = (1,2)) / tf.math.maximum(tf.math.reduce_sum(x[1], axis = (1,2)), 1e-5))([supp_fts, supp_lb]); # proto.shape = (nshot, 256)
-  proto = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(x[0], (tf.shape(x[0])[0], 1, 1, 1, tf.shape(x[0])[1])), (1, tf.shape(x[1])[0], tf.shape(x[1])[1], tf.shape(x[1])[2], 1)))([proto, qry_fts]); # proto.shape = (nshot, qn, h / 16, w / 16, 256)
-  qry_fts = tf.keras.layers.Lambda(lambda x: tf.tile(tf.expand_dims(x[0], axis = 0), (tf.shape(x[1])[0],1,1,1,1)))([qry_fts, proto]); # qry_fts.shape = (nshot, qn, h / 16, w / 16, 256)
-  qry_comp_fts = tf.keras.layers.Concatenate(axis = -1)([qry_fts, proto]); # qry_comp_fts.shape = (nshot, qn, h / 16, w / 16, 256 + 256)
-  weighted = tf.keras.backend.map_fn(fn = Attention(), elems = qry_comp_fts); # qry_comp_fts.shape = (nshot, qn, h / 16, w / 16, 256)
+  proto = tf.keras.layers.Lambda(lambda x: tf.tile(tf.reshape(x[0], (tf.shape(x[0])[0], 1, 1, tf.shape(x[0])[1])), (1, tf.shape(x[1])[1], tf.shape(x[1])[2], 1)))([proto, qry_fts]); # proto.shape = (nshot, h / 16, w / 16, 256)
+  qry_comp_fts = tf.keras.layers.Lambda(lambda x: tf.map_fn(lambda y: tf.concat([x[1], tf.tile(tf.expand_dims(y, axis = 0), (tf.shape(x[1])[0], 1, 1, 1))], axis = -1), x[0]))([proto, qry_fts]); # qry_comp_fts.shape = (nshot, qn, h/16, w/16, 512)
+  qry_comp_fts = tf.keras.layers.Lambda(lambda x: tf.reshape(tf.transpose(x, (1,2,3,0,4)), (tf.shape(x)[1], tf.shape(x)[2], tf.shape(x)[3], -1)))(qry_comp_fts); # qry_comp_fts.shape = (qn, h/16, w/16, nshot * 512)
+  qry_comp_fts = Attention(nshot)(qry_comp_fts); # attention.shape = (nshot, qn, h / 16, w / 16, 256)
   weighted = tf.keras.layers.Softmax(axis = 0)(qry_comp_fts); # outputs.shape = (nshot, qn, h / 16, w / 16, 256)
   weighted_sum = tf.keras.layers.Lambda(lambda x: tf.math.reduce_sum(x, axis = 0))(weighted); # weighted_sum.shape = (qn, h / 16, w / 16, 256)
   return tf.keras.Model(inputs = (query, support, labels), outputs = weighted_sum);
