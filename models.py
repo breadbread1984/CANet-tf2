@@ -63,6 +63,7 @@ def Attention(nshot):
   inputs = tf.keras.Input((None, None, nshot * 512)); # inputs.shape = (qn, h / 16, w / 16, nshot * 512)
   # 1) get masks for query images according to this support image
   outputs = tf.keras.layers.Conv2D(nshot * 256, (3, 3), padding = 'same', groups = nshot)(inputs); # outputs.shape = (qn, h / 16, w / 16, nshot * 256)
+  outputs = tf.keras.layers.Lambda(lambda x, n: tf.transpose(tf.reshape(x, (tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], n, 256)), (3, 0, 1, 2, 4)), arguments = {'n': nshot})(outputs); # outputs.shape = (nshot, qn, h/16, w/16, 256)
   # 2) get attention weights for query images of this support image
   att = tf.keras.layers.Conv2D(nshot * 256, (3, 3), padding = 'same', groups = nshot)(inputs); # att.shape = (qn, h / 16, w / 16, nshot * 256)
   att = tf.keras.layers.MaxPool2D(pool_size = (3, 3), strides = (1, 1), padding = 'same')(att); # att.shape = (qn, h / 16, w / 16, nshot * 256)
