@@ -143,8 +143,8 @@ def IterativeOptimizationModule(has_forward_pass = False):
 
   inputs = tf.keras.Input((None, None, 256)); # inputs.shape = (qn, h / 8, w / 8, 256)
   if has_forward_pass:
-    mask = tf.keras.Input((None, None, 1)); # mask.shape = (qn, h / 8, w / 8, 1)
-    results = tf.keras.layers.Concatenate(axis = -1)([inputs, mask]); # results.shape = (qn, h / 8, w / 8, 256 + 1)
+    mask = tf.keras.Input((None, None, 2)); # mask.shape = (qn, h / 8, w / 8, 2)
+    results = tf.keras.layers.Concatenate(axis = -1)([inputs, mask]); # results.shape = (qn, h / 8, w / 8, 256 + 2)
   else:
     results = inputs; # results.shape = (qn, h / 8, w / 8, 256)
   def make_conv_block(inputs):
@@ -167,6 +167,11 @@ def IterativeOptimizationModule(has_forward_pass = False):
   results = make_vanilla_residual_block(results); # results.shape = (qn, h / 8, w / 8, 256)
   results = make_vanilla_residual_block(results); # results.shape = (qn, h / 8, w / 8, 256)
   results = AtrousSpatialPyramidPooling(results); # results.shape = (qn, h / 8, w / 8, 256)
+  results = tf.keras.layers.Conv2D(2, (1, 1), padding = 'same', activation = tf.keras.activations.softmax)(results); # results.shape = (qn, h / 8, w / 8, 2)
+  if has_forward_pass:
+    return tf.keras.Model(inputs = (inputs, mask), outputs = results);
+  else:
+    return tf.keras.Model(inputs = inputs, outputs = results);
 
 if __name__ == "__main__":
 
