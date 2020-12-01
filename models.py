@@ -139,10 +139,10 @@ def AtrousSpatialPyramidPooling(channel):
   results = tf.keras.layers.ReLU()(results);
   return tf.keras.Model(inputs = inputs, outputs = results);
 
-def IterativeOptimizationModule(has_forward_pass = False):
+def IterativeOptimizationModule(has_predicted_mask = False):
 
   inputs = tf.keras.Input((None, None, 256)); # inputs.shape = (qn, h / 8, w / 8, 256)
-  if has_forward_pass:
+  if has_predicted_mask:
     mask = tf.keras.Input((None, None, 2)); # mask.shape = (qn, h / 8, w / 8, 2)
   def make_vanilla_residual_block(inputs, mask = None):
     residual = inputs;
@@ -160,20 +160,37 @@ def IterativeOptimizationModule(has_forward_pass = False):
   results = make_vanilla_residual_block(results); # results.shape = (qn, h / 8, w / 8, 256)
   results = AtrousSpatialPyramidPooling(256)(results); # results.shape = (qn, h / 8, w / 8, 256)
   results = tf.keras.layers.Conv2D(2, (1, 1), padding = 'same', activation = tf.keras.activations.softmax)(results); # results.shape = (qn, h / 8, w / 8, 2)
-  if has_forward_pass:
+  if has_predicted_mask:
     return tf.keras.Model(inputs = (inputs, mask), outputs = results);
   else:
     return tf.keras.Model(inputs = inputs, outputs = results);
 
+def CANet(nshot, iter_num = 3, pretrain = None):
+
+  assert type(iter_num) is int and iter_num > 1;
+  query = tf.keras.Input((None, None, 3)); # query.shape = (qn, h, w, 3)
+  support = tf.keras.Input((None, None, 3), batch_size = nshot); # support.shape = (nshot, h, w, 3)
+  labels = tf.keras.Input((None, None, 1), batch_size = nshot); # labels.shape = (nshot, h, w, 1)
+  feature = DenseComparisonModule(nshot, pretrain)([query, support, labels]); # feature.shape = (qn, h / 8, w / 8, 256)
+  mask = IterativeOptimizationModule(False)(feature); # mask.shape = (qn, h / 8, w / 8, 2)
+  for i in range(1, iter_num):
+    mask = IterativeOptimizationModule(True)([feature, mask]); # mask.shape = (qn, h / 8, w / 8, 2)
+  mask = tf.keras.layers.Lambda(lambda x: tf.image.resize(x, (8 * tf.shape(x)[1], 8 * tf.shape(x)[2]), tf.image.ResizeMethod.BILINEAR))(mask); # mask.shape = (qn, h, w, 2)
+  mask = tf.keras.layers.Lambda(lambda x: tf.math.argmax(x, axis = -1))(mask); # mask.shape = (qn, h, w)
+  return tf.keras.Model(inputs = (query, support, labels), outputs = mask);
+
 if __name__ == "__main__":
 
   assert tf.executing_eagerly();
+  '''
   dcm = DenseComparisonModule(4);
   dcm.save('dcm.h5');
+  '''
   import numpy as np;
   query = np.random.normal(size = (2, 224, 224, 3))
   support = np.random.normal(size = (4, 224, 224, 3))
   labels = np.random.normal(size = (4, 224, 224, 1))
+  '''
   results = dcm([query, support, labels]);
   print(results.shape)
   iom = IterativeOptimizationModule(True);
@@ -182,3 +199,8 @@ if __name__ == "__main__":
   mask = np.random.normal(size = (2, 28, 28, 2))
   results = iom([fts, mask]);
   print(results.shape)
+  '''
+  canet = CANet(4, 2);
+  canet.save('canet.h5');
+  results = canet([query, support, labels]);
+  print(results.shape);
