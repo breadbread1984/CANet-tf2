@@ -139,11 +139,10 @@ def AtrousSpatialPyramidPooling(channel):
   results = tf.keras.layers.ReLU()(results);
   return tf.keras.Model(inputs = inputs, outputs = results);
 
-def IterativeOptimizationModule(has_predicted_mask = False):
+def IterativeOptimizationModule():
 
   inputs = tf.keras.Input((None, None, 256)); # inputs.shape = (qn, h / 8, w / 8, 256)
-  if has_predicted_mask:
-    mask = tf.keras.Input((None, None, 2)); # mask.shape = (qn, h / 8, w / 8, 2)
+  mask = tf.keras.Input((None, None, 2)); # mask.shape = (qn, h / 8, w / 8, 2)
   def make_vanilla_residual_block(inputs, mask = None):
     residual = inputs;
     if mask is not None: inputs = tf.keras.layers.Concatenate(axis = -1)([inputs, mask]);
@@ -155,18 +154,12 @@ def IterativeOptimizationModule(has_predicted_mask = False):
     results = tf.keras.layers.Add()([residual, results]);
     results = tf.keras.layers.ReLU()(results);
     return results;
-  if has_predicted_mask:
-    results = make_vanilla_residual_block(inputs, mask); # results.shape = (qn, h / 8, w / 8, 256)
-  else:
-    results = make_vanilla_residual_block(inputs); # results.shape = (qn, h / 8, w / 8, 256)
+  results = make_vanilla_residual_block(inputs, mask); # results.shape = (qn, h / 8, w / 8, 256)
   results = make_vanilla_residual_block(results); # results.shape = (qn, h / 8, w / 8, 256)
   results = make_vanilla_residual_block(results); # results.shape = (qn, h / 8, w / 8, 256)
   results = AtrousSpatialPyramidPooling(256)(results); # results.shape = (qn, h / 8, w / 8, 256)
   results = tf.keras.layers.Conv2D(2, (1, 1), padding = 'same', activation = tf.keras.activations.softmax)(results); # results.shape = (qn, h / 8, w / 8, 2)
-  if has_predicted_mask:
-    return tf.keras.Model(inputs = (inputs, mask), outputs = results);
-  else:
-    return tf.keras.Model(inputs = inputs, outputs = results);
+  return tf.keras.Model(inputs = (inputs, mask), outputs = results);
 
 def CANet(nshot, iter_num = 3, pretrain = None):
 
@@ -175,10 +168,13 @@ def CANet(nshot, iter_num = 3, pretrain = None):
   support = tf.keras.Input((None, None, 3), batch_size = nshot); # support.shape = (nshot, h, w, 3)
   labels = tf.keras.Input((None, None, 1), batch_size = nshot); # labels.shape = (nshot, h, w, 1)
   feature = DenseComparisonModule(nshot, pretrain)([query, support, labels]); # feature.shape = (qn, h / 8, w / 8, 256)
-  mask = IterativeOptimizationModule(False)(feature); # mask.shape = (qn, h / 8, w / 8, 2)
-  for i in range(1, iter_num):
-    mask = IterativeOptimizationModule(True)([feature, mask]); # mask.shape = (qn, h / 8, w / 8, 2)
+  mask = tf.keras.layers.Conv2D(2, (1, 1), padding = 'same', activation = tf.keras.activations.softmax)(feature); # mask.shape = (qn, h / 8, w / 8, 2)
+  iom = IterativeOptimizationModule();
+  for i in range(iter_num):
+    mask = iom([feature, mask]); # mask.shape = (qn, h / 8, w / 8, 2)
+  # scale the prediction to image size
   mask = tf.keras.layers.Lambda(lambda x: tf.image.resize(x, (8 * tf.shape(x)[1], 8 * tf.shape(x)[2]), tf.image.ResizeMethod.BILINEAR))(mask); # mask.shape = (qn, h, w, 2)
+  # get foreground from the prediction
   mask = tf.keras.layers.Lambda(lambda x: tf.math.argmax(x, axis = -1))(mask); # mask.shape = (qn, h, w)
   return tf.keras.Model(inputs = (query, support, labels), outputs = mask);
 
