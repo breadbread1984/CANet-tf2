@@ -70,10 +70,10 @@ def Attention(nshot):
   att = tf.keras.layers.Conv2D(nshot * 256, (3, 3), padding = 'same', groups = nshot)(att); # att.shape = (qn, h / 16, w / 16, nshot * 256)
   att = tf.keras.layers.Lambda(lambda x, n: tf.transpose(tf.reshape(x, (tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], n, 256)), (3, 0, 1, 2, 4)), arguments = {'n': nshot})(att); # att.shape = (nshot, qn, h / 16, w / 16, 256)
   att = tf.keras.layers.Lambda(lambda x: tf.math.reduce_mean(x, axis = [2, 3, 4], keepdims = True))(att); # att.shape = (nshot, qn, 1, 1, 1)
-  attended = tf.keras.layers.Lambda(lambda x: tf.expand_dims(x[0], axis = 0) * x[1])([outputs, att]); # attended.shape = (nshot, qn, h / 16, w / 16, 256)
+  attended = tf.keras.layers.Lambda(lambda x: x[0] * x[1])([outputs, att]); # attended.shape = (nshot, qn, h / 16, w / 16, 256)
   return tf.keras.Model(inputs = inputs, outputs = attended, name = 'attention');
 
-def DenseComparisonModule(nshot = 10, pretrain = None):
+def DenseComparisonModule(nshot, pretrain = None):
 
   query = tf.keras.Input((None, None, 3)); # query.shape = (qn, h, w, 3)
   support = tf.keras.Input((None, None, 3), batch_size = nshot); # support.shape = (nshot, h, w, 3)
@@ -139,5 +139,11 @@ def IterativeOptimizationModule():
 if __name__ == "__main__":
 
   assert tf.executing_eagerly();
-  dcm = DenseComparisonModule();
+  dcm = DenseComparisonModule(4);
   dcm.save('dcm.h5');
+  import numpy as np;
+  query = np.random.normal(size = (1, 224, 224, 3))
+  support = np.random.normal(size = (4, 224, 224, 3))
+  labels = np.random.normal(size = (4, 224, 224, 1))
+  results = dcm([query, support, labels]);
+  print(results.shape)
