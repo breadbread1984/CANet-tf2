@@ -161,7 +161,7 @@ def IterativeOptimizationModule():
   results = tf.keras.layers.Conv2D(2, (1, 1), padding = 'same', activation = tf.keras.activations.softmax)(results); # results.shape = (qn, h / 8, w / 8, 2)
   return tf.keras.Model(inputs = (inputs, mask), outputs = results);
 
-def CANet(nshot, iter_num = 3, pretrain = None, drop_rate = 0):
+def CANet(nshot, iter_num = 4, pretrain = None, drop_rate = 0):
 
   assert type(iter_num) is int and iter_num > 1;
   query = tf.keras.Input((None, None, 3)); # query.shape = (qn, h, w, 3)
@@ -179,7 +179,7 @@ def CANet(nshot, iter_num = 3, pretrain = None, drop_rate = 0):
   # scale the prediction to image size
   mask = tf.keras.layers.Lambda(lambda x: tf.image.resize(x, (8 * tf.shape(x)[1], 8 * tf.shape(x)[2]), tf.image.ResizeMethod.BILINEAR))(mask); # mask.shape = (qn, h, w, 2)
   # get foreground from the prediction
-  mask = tf.keras.layers.Lambda(lambda x: tf.math.argmax(x, axis = -1))(mask); # mask.shape = (qn, h, w)
+  mask = tf.keras.layers.Softmax()(mask);
   return tf.keras.Model(inputs = (query, support, labels), outputs = mask);
 
 if __name__ == "__main__":
