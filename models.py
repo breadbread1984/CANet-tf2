@@ -144,18 +144,9 @@ def IterativeOptimizationModule(has_forward_pass = False):
   inputs = tf.keras.Input((None, None, 256)); # inputs.shape = (qn, h / 8, w / 8, 256)
   if has_forward_pass:
     mask = tf.keras.Input((None, None, 2)); # mask.shape = (qn, h / 8, w / 8, 2)
-    results = tf.keras.layers.Concatenate(axis = -1)([inputs, mask]); # results.shape = (qn, h / 8, w / 8, 256 + 2)
-  else:
-    results = inputs; # results.shape = (qn, h / 8, w / 8, 256)
-  def make_conv_block(inputs):
-    results = tf.keras.layers.Conv2D(256, (3, 3), padding = 'same')(inputs); # results.shape = (qn, h / 8, w / 8, 256)
-    results = tf.keras.layers.BatchNormalization()(results); # results.shape = (qn, h / 8, w / 8, 256)
-    results = tf.keras.layers.ReLU()(results); # results.shape = (qn, h / 8, w / 8, 256)
-    return results;
-  results = make_conv_block(results); # results.shape = (qn, h / 8, w / 8, 256)
-  results = make_conv_block(results); # results.shape = (qn, h / 8, w / 8, 256)
-  def make_vanilla_residual_block(inputs):
+  def make_vanilla_residual_block(inputs, mask = None):
     residual = inputs;
+    if mask is not None: inputs = tf.keras.layers.Concatenate(axis = -1)([inputs, mask]);
     results = tf.keras.layers.Conv2D(256, (3, 3), padding = 'same')(inputs);
     results = tf.keras.layers.BatchNormalization()(results);
     results = tf.keras.layers.ReLU()(results);
@@ -164,9 +155,10 @@ def IterativeOptimizationModule(has_forward_pass = False):
     results = tf.keras.layers.Add()([residual, results]);
     results = tf.keras.layers.ReLU()(results);
     return results;
+  results = make_vanilla_residual_block(inputs, mask); # results.shape = (qn, h / 8, w / 8, 256)
   results = make_vanilla_residual_block(results); # results.shape = (qn, h / 8, w / 8, 256)
   results = make_vanilla_residual_block(results); # results.shape = (qn, h / 8, w / 8, 256)
-  results = AtrousSpatialPyramidPooling(results); # results.shape = (qn, h / 8, w / 8, 256)
+  results = AtrousSpatialPyramidPooling(256)(results); # results.shape = (qn, h / 8, w / 8, 256)
   results = tf.keras.layers.Conv2D(2, (1, 1), padding = 'same', activation = tf.keras.activations.softmax)(results); # results.shape = (qn, h / 8, w / 8, 2)
   if has_forward_pass:
     return tf.keras.Model(inputs = (inputs, mask), outputs = results);
@@ -183,4 +175,10 @@ if __name__ == "__main__":
   support = np.random.normal(size = (4, 224, 224, 3))
   labels = np.random.normal(size = (4, 224, 224, 1))
   results = dcm([query, support, labels]);
+  print(results.shape)
+  iom = IterativeOptimizationModule(True);
+  iom.save('iom.h5');
+  fts = np.random.normal(size = (2, 28, 28, 256))
+  mask = np.random.normal(size = (2, 28, 28, 2))
+  results = iom([fts, mask]);
   print(results.shape)
