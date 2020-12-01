@@ -155,7 +155,10 @@ def IterativeOptimizationModule(has_predicted_mask = False):
     results = tf.keras.layers.Add()([residual, results]);
     results = tf.keras.layers.ReLU()(results);
     return results;
-  results = make_vanilla_residual_block(inputs, mask); # results.shape = (qn, h / 8, w / 8, 256)
+  if has_predicted_mask:
+    results = make_vanilla_residual_block(inputs, mask); # results.shape = (qn, h / 8, w / 8, 256)
+  else:
+    results = make_vanilla_residual_block(inputs); # results.shape = (qn, h / 8, w / 8, 256)
   results = make_vanilla_residual_block(results); # results.shape = (qn, h / 8, w / 8, 256)
   results = make_vanilla_residual_block(results); # results.shape = (qn, h / 8, w / 8, 256)
   results = AtrousSpatialPyramidPooling(256)(results); # results.shape = (qn, h / 8, w / 8, 256)
@@ -182,24 +185,10 @@ def CANet(nshot, iter_num = 3, pretrain = None):
 if __name__ == "__main__":
 
   assert tf.executing_eagerly();
-  '''
-  dcm = DenseComparisonModule(4);
-  dcm.save('dcm.h5');
-  '''
   import numpy as np;
   query = np.random.normal(size = (2, 224, 224, 3))
   support = np.random.normal(size = (4, 224, 224, 3))
   labels = np.random.normal(size = (4, 224, 224, 1))
-  '''
-  results = dcm([query, support, labels]);
-  print(results.shape)
-  iom = IterativeOptimizationModule(True);
-  iom.save('iom.h5');
-  fts = np.random.normal(size = (2, 28, 28, 256))
-  mask = np.random.normal(size = (2, 28, 28, 2))
-  results = iom([fts, mask]);
-  print(results.shape)
-  '''
   canet = CANet(4, 2);
   canet.save('canet.h5');
   results = canet([query, support, labels]);
