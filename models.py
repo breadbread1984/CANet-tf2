@@ -161,7 +161,7 @@ def IterativeOptimizationModule():
   results = tf.keras.layers.Conv2D(2, (1, 1), padding = 'same', activation = tf.keras.activations.softmax)(results); # results.shape = (qn, h / 8, w / 8, 2)
   return tf.keras.Model(inputs = (inputs, mask), outputs = results);
 
-def CANet(nshot, iter_num = 3, pretrain = None):
+def CANet(nshot, iter_num = 3, pretrain = None, drop_rate = 0):
 
   assert type(iter_num) is int and iter_num > 1;
   query = tf.keras.Input((None, None, 3)); # query.shape = (qn, h, w, 3)
@@ -171,6 +171,10 @@ def CANet(nshot, iter_num = 3, pretrain = None):
   mask = tf.keras.layers.Conv2D(2, (1, 1), padding = 'same', activation = tf.keras.activations.softmax)(feature); # mask.shape = (qn, h / 8, w / 8, 2)
   iom = IterativeOptimizationModule();
   for i in range(iter_num):
+    if drop_rate != 0:
+      mask = tf.keras.layers.Lambda(lambda x, dr: tf.cond(tf.math.less(tf.random.uniform((), maxval = 1), dr), 
+                                                          lambda: tf.stack([tf.ones_like(x)[...,0], tf.zeros_like(x)[...,0]], axis = -1), 
+                                                          lambda: x), arguments = {'dr': drop_rate})(mask);
     mask = iom([feature, mask]); # mask.shape = (qn, h / 8, w / 8, 2)
   # scale the prediction to image size
   mask = tf.keras.layers.Lambda(lambda x: tf.image.resize(x, (8 * tf.shape(x)[1], 8 * tf.shape(x)[2]), tf.image.ResizeMethod.BILINEAR))(mask); # mask.shape = (qn, h, w, 2)
@@ -185,7 +189,10 @@ if __name__ == "__main__":
   query = np.random.normal(size = (2, 224, 224, 3))
   support = np.random.normal(size = (4, 224, 224, 3))
   labels = np.random.normal(size = (4, 224, 224, 1))
-  canet = CANet(4, 2);
+  canet = CANet(4, 2, drop_rate = 0.2);
   canet.save('canet.h5');
+  canet.save_weights('canet_weights.h5');
   results = canet([query, support, labels]);
   print(results.shape);
+  canet = CANet(4, 2);
+  canet.load_weights('canet_weights.h5');
