@@ -37,7 +37,7 @@ def main(trainset_dir, testset_dir, anno_dir):
         print('detected nan in loss, skip current iteration');
         continue;
     grads = tape.gradient(loss, canet.trainable_variables);
-    if tf.math.reduce_any([tf.math.reduce_any(tf.math.logical_or(tf.math.is_nan(grad), tf.math.is_inf(grad))) for grad in grads]) == True:
+    if tf.math.reduce_any([tf.math.reduce_any(tf.math.logical_or(tf.math.is_nan(grad), tf.math.is_inf(grad))) for grad in grads if grad is not None]) == True:
       print('detected nan in grads, skip current iterations');
       continue;
     optimizer.apply_gradients(zip(grads, canet.trainable_variables));
