@@ -16,6 +16,7 @@ class Data(object):
     self.dirs = {'train': trainset_dir,
                  'test': testset_dir}
 
+  @tf.function
   def preprocess(self, data, label):
     
     data = tf.cast(data, dtype = tf.float32);
