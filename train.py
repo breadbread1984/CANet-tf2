@@ -6,7 +6,7 @@ import tensorflow as tf;
 from models import CANet;
 from Data import Data;
 
-nshot = 5;
+nshot = 1;
 nquery = 1;
 
 def main(trainset_dir, testset_dir, anno_dir):
@@ -63,7 +63,7 @@ def main(trainset_dir, testset_dir, anno_dir):
         seg = tf.argmax(preds[0:1,...], axis = -1); # cls.shape = (1, 256, 256)
         palette = tf.constant([[0,0,0],[255,255,255]], dtype = tf.int32); # palette.shape = (2, 3)
         colormap = tf.cast(tf.gather_nd(palette, tf.expand_dims(seg, axis = -1)), dtype = tf.float32); # colormap.shape = (1, 256, 256, 3)
-        img = tf.cast(tf.clip_by_value(tf.math.rint(0.5 * colormap + 0.5 * data[0:1, ...,::-1] * 255.), 0, 255), dtype = tf.uint8);
+        img = tf.cast(tf.clip_by_value(tf.math.rint(0.5 * colormap + 0.5 * qry[0:1, ...,::-1] * 255.), 0, 255), dtype = tf.uint8);
         tf.summary.image('segmentation', img, step = optimizer.iterations);
       print('Step #%d Train Loss: %.6f Train Accuracy: %.6f Test Loss: %.6f Test Accuracy: %.6f' % \
           (optimizer.iterations, train_loss.result(), train_accuracy.result(), test_loss.result(), test_accuracy.result()));
