@@ -42,7 +42,7 @@ def main(trainset_dir, testset_dir, anno_dir):
       continue;
     optimizer.apply_gradients(zip(grads, canet.trainable_variables));
     train_loss.update_state(loss);
-    train_accuracy.update_state(labels, preds);
+    train_accuracy.update_state(qry_lb, preds);
     if tf.equal(optimizer.iterations % 10000, 0):
       # save checkpoint
       checkpoint.save(join('checkpoints', 'ckpt'));
@@ -53,7 +53,7 @@ def main(trainset_dir, testset_dir, anno_dir):
         preds = canet([qry, supp, supp_lb]);
         loss = tf.keras.losses.SparseCategoricalCrossentropy()(qry_lb, preds);
         test_loss.update_state(loss);
-        test_accuracy.update_state(labels, preds);
+        test_accuracy.update_state(qry_lb, preds);
       # write log
       with log.as_default():
         tf.summary.scalar('train loss', train_loss.result(), step = optimizer.iterations);
