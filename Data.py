@@ -53,19 +53,20 @@ class Data(object):
 
   def getBatch(self, nshot = 5, nquery = 5, ds = 'train'):
     
+    assert ds in ['train', 'test'];
     # pick up a category
-    train_cids = self.annotation[ds].getCatIds();
+    train_cids = self.annotations[ds].getCatIds();
     cid = sample(train_cids, 1);
     # pick up several images containing objects of this category
-    img_ids = self.annotation[ds].getImgIds(catIds = cid);
+    img_ids = self.annotations[ds].getImgIds(catIds = cid);
     img_ids = sample(img_ids, nshot + nquery);
     # generate a batch of samples
     imgs = list();
     masks = list();
     for img_id in img_ids:
-      img_info = self.annotation[ds].loadImgs([img_id])[0];
-      annIds = self.annotation[ds].getAnnIds(imgIds = img_id, catIds = cid);
-      anns = self.annotation[ds].loadAnns(annIds);
+      img_info = self.annotations[ds].loadImgs([img_id])[0];
+      annIds = self.annotations[ds].getAnnIds(imgIds = img_id, catIds = cid);
+      anns = self.annotations[ds].loadAnns(annIds);
       img = cv2.imread(join(self.dirs[ds], img_info['file_name']));
       mask = np.zeros((img_info['height'], img_info['width']));
       for ann in anns:
