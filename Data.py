@@ -70,7 +70,7 @@ class Data(object):
       img = cv2.imread(join(self.dirs[ds], img_info['file_name']));
       mask = np.zeros((img_info['height'], img_info['width']));
       for ann in anns:
-        instance_mask = anno.annToMask(ann);
+        instance_mask = self.annotations[ds].annToMask(ann);
         mask = np.maximum(mask, instance_mask);
       # preprocess
       img, mask = self.preprocess(img, mask)
