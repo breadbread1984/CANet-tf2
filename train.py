@@ -7,7 +7,7 @@ from models import CANet;
 from Data import Data;
 
 nshot = 5;
-batch_size = nshot * 2;
+nquery = 1;
 
 def main(trainset_dir, testset_dir, anno_dir):
 
@@ -26,7 +26,7 @@ def main(trainset_dir, testset_dir, anno_dir):
   log = tf.summary.create_file_writer('checkpoints');
   # train
   while True:
-    supp, supp_lb, qry, qry_lb = data.getTrainBatch(nshot, nshot);
+    supp, supp_lb, qry, qry_lb = data.getTrainBatch(nshot, nquery);
     with tf.GradientTape() as tape:
       preds = canet([qry, supp, supp_lb]);
       if tf.math.reduce_any(tf.math.logical_or(tf.math.is_nan(preds), tf.math.is_inf(preds))) == True:
@@ -49,7 +49,7 @@ def main(trainset_dir, testset_dir, anno_dir):
     if tf.equal(optimizer.iterations % 1000, 0):
       # evaluate
       for i in range(10):
-        supp, supp_lb, qry, qry_lb = data.getTestBatch(nshot, nshot);
+        supp, supp_lb, qry, qry_lb = data.getTestBatch(nshot, nquery);
         preds = canet([qry, supp, supp_lb]);
         loss = tf.keras.losses.SparseCategoricalCrossentropy()(qry_lb, preds);
         test_loss.update_state(loss);
