@@ -18,6 +18,8 @@ class Data(object):
 
   def preprocess(self, data, label):
     
+    data = tf.cast(data, dtype = tf.float32);
+    label = tf.cast(label, dtype = tf.float32);
     # 1) random hsv
     data = tf.expand_dims(data, axis = 0); # data.shape = (1, h, w, 3)
     data = tf.image.random_hue(data, 10 / 180);
