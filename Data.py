@@ -49,8 +49,6 @@ class Data(object):
     # 6) squeeze
     data = tf.squeeze(data, axis = 0) / 255.; # data.shape = (512, 512, 3)
     label = tf.reshape(label, (tf.shape(label)[1], tf.shape(label)[2])); # label.shape = (512, 512)
-    # 7) label label
-    label = tf.gather(label_map, tf.cast(label, dtype = tf.int32)); # label.shape = (512, 512)
     return data, label;
 
   def getBatch(self, nshot = 5, nquery = 5, ds = 'train'):
