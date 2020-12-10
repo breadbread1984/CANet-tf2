@@ -30,7 +30,7 @@ def main(trainset_dir, testset_dir, anno_dir):
     qry_lb_small = tf.image.resize(qry_lb, tf.shape(qry_lb)[1:3] // 8, method = tf.image.ResizeMethod.NEAREST_NEIGHBOR);
     with tf.GradientTape() as tape:
       preds = canet([qry, supp, supp_lb]);
-      if tf.math.reduce_any(tf.math.logical_or(tf.math.is_nan(preds), tf.math.is_inf(preds))) == True:
+      if tf.math.reduce_any(tf.math.logical_or(tf.math.is_nan(preds[-1]), tf.math.is_inf(preds[-1]))) == True:
         print('detected nan in preds, skip current iteration');
         continue;
       loss = 0;
