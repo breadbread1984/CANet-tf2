@@ -164,11 +164,13 @@ def IterativeOptimizationModule():
 def CANet(nshot, iter_num = 4, pretrain = None, drop_rate = 0):
 
   assert type(iter_num) is int and iter_num > 1;
+  outputs = list();
   query = tf.keras.Input((None, None, 3)); # query.shape = (qn, h, w, 3)
   support = tf.keras.Input((None, None, 3), batch_size = nshot); # support.shape = (nshot, h, w, 3)
   labels = tf.keras.Input((None, None, 1), batch_size = nshot); # labels.shape = (nshot, h, w, 1)
   feature = DenseComparisonModule(nshot, pretrain)([query, support, labels]); # feature.shape = (qn, h / 8, w / 8, 256)
   mask = tf.keras.layers.Conv2D(2, (1, 1), padding = 'same', activation = tf.keras.activations.softmax)(feature); # mask.shape = (qn, h / 8, w / 8, 2)
+  outputs.append(mask);
   iom = IterativeOptimizationModule();
   for i in range(iter_num):
     if drop_rate != 0:
@@ -176,11 +178,13 @@ def CANet(nshot, iter_num = 4, pretrain = None, drop_rate = 0):
                                                           lambda: tf.stack([tf.ones_like(x)[...,0], tf.zeros_like(x)[...,0]], axis = -1), 
                                                           lambda: x), arguments = {'dr': drop_rate})(mask);
     mask = iom([feature, mask]); # mask.shape = (qn, h / 8, w / 8, 2)
+    outputs.append(mask);
   # scale the prediction to image size
   mask = tf.keras.layers.Lambda(lambda x: tf.image.resize(x, (8 * tf.shape(x)[1], 8 * tf.shape(x)[2]), tf.image.ResizeMethod.BILINEAR))(mask); # mask.shape = (qn, h, w, 2)
   # get foreground from the prediction
   mask = tf.keras.layers.Softmax()(mask);
-  return tf.keras.Model(inputs = (query, support, labels), outputs = mask);
+  outputs.append(mask);
+  return tf.keras.Model(inputs = (query, support, labels), outputs = outputs if drop_rate != 0 else mask);
 
 if __name__ == "__main__":
 
