@@ -68,7 +68,7 @@ def main(trainset_dir, testset_dir, anno_dir):
         tf.summary.scalar('train accuracy', train_accuracy.result(), step = optimizer.iterations);
         tf.summary.scalar('test loss', test_loss.result(), step = optimizer.iterations);
         tf.summary.scalar('test accuracy', test_accuracy.result(), step = optimizer.iterations);
-        seg = tf.argmax(preds[0:1,...], axis = -1); # cls.shape = (1, 256, 256)
+        seg = tf.argmax(preds[-1][0:1,...], axis = -1); # cls.shape = (1, 256, 256)
         palette = tf.constant([[0,0,0],[255,255,255]], dtype = tf.int32); # palette.shape = (2, 3)
         colormap = tf.cast(tf.gather_nd(palette, tf.expand_dims(seg, axis = -1)), dtype = tf.float32); # colormap.shape = (1, 256, 256, 3)
         img = tf.cast(tf.clip_by_value(tf.math.rint(0.5 * colormap + 0.5 * qry[0:1, ...,::-1] * 255.), 0, 255), dtype = tf.uint8);
