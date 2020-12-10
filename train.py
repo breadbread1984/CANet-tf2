@@ -27,7 +27,7 @@ def main(trainset_dir, testset_dir, anno_dir):
   # train
   while True:
     supp, supp_lb, qry, qry_lb = data.getTrainBatch(nshot, nquery);
-    qry_lb_small = tf.image.resize(qry_lb, qry_lb.shape[1:3] // 8, method = tf.image.ResizeMethod.NEAREST_NEIGHBOR);
+    qry_lb_small = tf.image.resize(qry_lb, tf.shape(qry_lb)[1:3] // 8, method = tf.image.ResizeMethod.NEAREST_NEIGHBOR);
     with tf.GradientTape() as tape:
       preds = canet([qry, supp, supp_lb]);
       if tf.math.reduce_any(tf.math.logical_or(tf.math.is_nan(preds), tf.math.is_inf(preds))) == True:
@@ -54,7 +54,7 @@ def main(trainset_dir, testset_dir, anno_dir):
       # evaluate
       for i in range(10):
         supp, supp_lb, qry, qry_lb = data.getTestBatch(nshot, nquery);
-        qry_lb_small = tf.image.resize(qry_lb, qry_lb.shape[1:3] // 8, method = tf.image.ResizeMethod.NEAREST_NEIGHBOR);
+        qry_lb_small = tf.image.resize(qry_lb, tf.shape(qry_lb)[1:3] // 8, method = tf.image.ResizeMethod.NEAREST_NEIGHBOR);
         preds = canet([qry, supp, supp_lb]);
         loss = 0;
         for i in range(len(preds) - 1):
