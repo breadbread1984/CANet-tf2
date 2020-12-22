@@ -11,7 +11,7 @@ nquery = 1;
 
 def main(trainset_dir, testset_dir, anno_dir):
 
-  canet = CANet(nshot, pretrain = 'resnet50.h5', drop_rate = 0.3);
+  canet = CANet(nshot, pretrain = 'resnet50.h5', drop_rate = 0);
   optimizer = tf.keras.optimizers.Adam(tf.keras.optimizers.schedules.ExponentialDecay(0.0025, decay_steps = 110000, decay_rate = 0.9));
   checkpoint = tf.train.Checkpoint(model = canet, optimizer = optimizer);
   train_loss = tf.keras.metrics.Mean(name = 'train loss', dtype = tf.float32);
@@ -27,16 +27,12 @@ def main(trainset_dir, testset_dir, anno_dir):
   # train
   while True:
     supp, supp_lb, qry, qry_lb = data.getTrainBatch(nshot, nquery);
-    qry_lb_small = tf.squeeze(tf.image.resize(tf.expand_dims(qry_lb, axis = -1), tf.shape(qry_lb)[1:3] // 8, method = tf.image.ResizeMethod.NEAREST_NEIGHBOR), axis = -1);
     with tf.GradientTape() as tape:
       preds = canet([qry, supp, supp_lb]);
-      if tf.math.reduce_any(tf.math.logical_or(tf.math.is_nan(preds[-1]), tf.math.is_inf(preds[-1]))) == True:
+      if tf.math.reduce_any(tf.math.logical_or(tf.math.is_nan(preds), tf.math.is_inf(preds))) == True:
         print('detected nan in preds, skip current iteration');
         continue;
-      loss = 0;
-      for i in range(len(preds) - 1):
-        loss += tf.keras.losses.SparseCategoricalCrossentropy(from_logits = True)(qry_lb_small, preds[i]);
-      loss += tf.keras.losses.SparseCategoricalCrossentropy()(qry_lb, preds[-1]);
+      loss = tf.keras.losses.SparseCategoricalCrossentropy()(qry_lb, preds);
       if tf.math.reduce_any(tf.math.logical_or(tf.math.is_nan(loss), tf.math.is_inf(loss))) == True:
         print('detected nan in loss, skip current iteration');
         continue;
@@ -46,7 +42,7 @@ def main(trainset_dir, testset_dir, anno_dir):
       continue;
     optimizer.apply_gradients(zip(grads, canet.trainable_variables));
     train_loss.update_state(loss);
-    train_accuracy.update_state(qry_lb, preds[-1]);
+    train_accuracy.update_state(qry_lb, preds);
     if tf.equal(optimizer.iterations % 10000, 0):
       # save checkpoint
       checkpoint.save(join('checkpoints', 'ckpt'));
@@ -54,21 +50,17 @@ def main(trainset_dir, testset_dir, anno_dir):
       # evaluate
       for i in range(10):
         supp, supp_lb, qry, qry_lb = data.getTestBatch(nshot, nquery);
-        qry_lb_small = tf.squeeze(tf.image.resize(tf.expand_dims(qry_lb, axis = -1), tf.shape(qry_lb)[1:3] // 8, method = tf.image.ResizeMethod.NEAREST_NEIGHBOR), axis = -1);
         preds = canet([qry, supp, supp_lb]);
-        loss = 0;
-        for i in range(len(preds) - 1):
-          loss += tf.keras.losses.SparseCategoricalCrossentropy(from_logits = True)(qry_lb_small, preds[i]);
-        loss += tf.keras.losses.SparseCategoricalCrossentropy()(qry_lb, preds[-1]);
+        loss = tf.keras.losses.SparseCategoricalCrossentropy()(qry_lb, preds);
         test_loss.update_state(loss);
-        test_accuracy.update_state(qry_lb, preds[-1]);
+        test_accuracy.update_state(qry_lb, preds);
       # write log
       with log.as_default():
         tf.summary.scalar('train loss', train_loss.result(), step = optimizer.iterations);
         tf.summary.scalar('train accuracy', train_accuracy.result(), step = optimizer.iterations);
         tf.summary.scalar('test loss', test_loss.result(), step = optimizer.iterations);
         tf.summary.scalar('test accuracy', test_accuracy.result(), step = optimizer.iterations);
-        seg = tf.argmax(preds[-1][0:1,...], axis = -1); # cls.shape = (1, 256, 256)
+        seg = tf.argmax(preds[0:1,...], axis = -1); # cls.shape = (1, 256, 256)
         palette = tf.constant([[0,0,0],[255,255,255]], dtype = tf.int32); # palette.shape = (2, 3)
         colormap = tf.cast(tf.gather_nd(palette, tf.expand_dims(seg, axis = -1)), dtype = tf.float32); # colormap.shape = (1, 256, 256, 3)
         img = tf.cast(tf.clip_by_value(tf.math.rint(0.5 * colormap + 0.5 * qry[0:1, ...,::-1] * 255.), 0, 255), dtype = tf.uint8);
